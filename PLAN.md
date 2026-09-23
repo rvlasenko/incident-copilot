@@ -43,14 +43,16 @@ Controlled agentic workflow для on-call инженеров: агент ище
 
 ## Неделя 1 — скелет orchestration (результат 1)
 
-- [ ] 1.1 FastAPI — low
-  - `uv add "fastapi[standard]"`
-  - контракт: `AssistRequest(query)`, `AssistResponse(run_id, outcome, answer)`; команда и `case_id` — на неделе 2 вместе с RBAC
+- [x] 1.1 FastAPI — low
+  - `uv add "fastapi[standard]"`, `httpx2` для TestClient
+  - контракт: `AssistRequest(query: QueryText)`, `AssistResponse(run_id, answer)`; `QueryText` — strip, 1..`MAX_QUERY_LENGTH` (2000), лимит против огромных логов в LLM
   - `create_app()` в `src/incident_copilot/api/app.py`, `GET /health`, `POST /assist` → заглушка
-  - ручная проверка через `/docs`, тест через `TestClient`: 200 на валидный запрос, 422 на пустой `query`
+  - тесты: границы длины (ровно лимит → 200, лимит + 1 → 422), пробелы → 422, проверка `loc` ошибки
+  - `Makefile`: `make check` перед каждым коммитом
 - [ ] 1.2 Контракты: `AgentState`, `Plan`, `RouteDecision`, `ToolCall`, `ToolResult`, `EvidenceItem`, `VerifierDecision`, `TerminationOutcome`, `Budget` — medium
 - [ ] 1.3 LangGraph: stub-ноды + conditional routing по `Route`, терминальные состояния — medium
 - [ ] 1.4 `LLMProvider` + OpenAI Planner со structured output + backend-валидация плана — medium
+- [ ] 🔍 Debug: смотреть state после каждой ноды через `graph.stream(..., stream_mode="updates")`; сломать роутер и найти, куда ушёл run
 - [ ] 1.5 Budget guard на каждом переходе + тесты на завершение (нет бесконечных циклов) — medium
 
 ## Неделя 2 — typed tool integration layer (результат 2)
@@ -61,6 +63,8 @@ Controlled agentic workflow для on-call инженеров: агент ище
 - [ ] 2.4 Retry policy для transient-ошибок, `ToolResult` со статусами `ok/error/timeout/denied` — medium
 - [ ] 2.5 Audit log каждого вызова (JSONL сейчас, PostgreSQL позже) + permission-negative тесты: запрещённые данные не попадают в промпт — medium
 
+- [ ] 🔍 Debug: fault injection в tools (таймаут, мусор в ответе, denied) — как заканчивается run и что видно в audit log
+
 ## Неделя 3 — retrieval и evidence verification (результат 3)
 
 - [ ] 3.1 Синтетические runbooks/postmortems — low
@@ -69,12 +73,16 @@ Controlled agentic workflow для on-call инженеров: агент ище
 - [ ] 3.4 Verifier: детерминированные проверки (покрытие обязательного evidence, сервис, окно времени, свежесть) + LLM-проверка достаточности и противоречий — high
 - [ ] 3.5 Один ограниченный query rewrite + retry retrieval, затем fallback / clarification / handoff — medium
 
+- [ ] 🔍 Debug: убрать нужный документ, добавить противоречащий — как реагирует verifier, что видно в evidence ledger
+
 ## Неделя 4 — ответ, citations, stateful runs
 
 - [ ] 4.1 Answer как structured brief: каждый claim ссылается на evidence ids из ledger — medium
 - [ ] 4.2 Citation validation: id существует, фрагмент реально есть в источнике, данные в окне инцидента; неподтверждённые claims → удалить или refuse — medium
 - [ ] 4.3 Checkpoints в PostgreSQL, interrupt на approval, resume с перепроверкой свежести evidence — high
 - [ ] 4.4 Anthropic за `LLMProvider` — low
+
+- [ ] 🔍 Debug: история checkpoints (`get_state_history`), resume с прошлого шага
 
 ## Неделя 5 — trajectory evaluation и observability (результат 4)
 
@@ -84,11 +92,23 @@ Controlled agentic workflow для on-call инженеров: агент ище
 - [ ] 5.4 Сравнение версий prompt/model/graph, regression gate в pytest — medium
 - [ ] 5.5 OpenTelemetry spans на каждую ноду и tool call, версии в атрибутах — medium
 
-## Дальше (детализируем по мере подхода)
+- [ ] 🔍 Debug: найти по трейсу, на каком шаге упал frozen case; сравнить trajectory до и после смены промпта
 
-- [ ] Нед. 6 — OpenSearch hybrid search, LlamaIndex ingestion, S3 (MinIO локально) — medium
-- [ ] Нед. 7 — Redis, Celery-воркеры индексации, Kafka `document.uploaded` — medium-high
-- [ ] Нед. 8 — Prometheus, Grafana, Sentry, GitHub Actions (eval как CI gate), docker-compose всего стека — medium
-- [ ] Нед. 9–10 — kind, Helm chart, ArgoCD, feature flag для investigation path — high
-- [ ] Нед. 11 — Terraform (VPC, EKS, S3, Lambda), деплой → `terraform destroy` — high
-- [ ] Нед. 12–13 — Next.js + TypeScript: citations, статус выполнения, недостающее evidence, approval — medium
+## 🏁 Контрольная точка: конец недели 5
+
+Работающий агент, eval, трейсинг, README со схемой архитектуры. Проект ценен сам по себе, дальше — по желанию.
+
+## Неделя 6 — отладка агентов (drills)
+
+- [ ] 6.1 Claude вносит баг, не говоря где (промпт, роутер, tool adapter, reducer state, verifier); найти по трейсам и тестам — 4–5 заходов разной сложности
+- [ ] 6.2 Шаблон разбора: симптом → где видно в трейсе → корневая причина → почему тесты не поймали → какой тест добавить
+- [ ] 6.3 Чеклист «как дебажить агента» в `docs/` на основе разборов
+
+## Необязательно: стек для резюме (любой порядок, каждый блок самостоятельный)
+
+- [ ] OpenSearch hybrid search, LlamaIndex ingestion, S3 (MinIO локально) — medium
+- [ ] Redis, Celery-воркеры индексации, Kafka `document.uploaded` — medium-high
+- [ ] Prometheus, Grafana, Sentry, GitHub Actions (eval как CI gate), docker-compose всего стека — medium
+- [ ] kind, Helm chart, ArgoCD, feature flag для investigation path — high
+- [ ] Terraform (VPC, EKS, S3, Lambda), деплой → `terraform destroy` — high
+- [ ] Next.js + TypeScript: citations, статус выполнения, недостающее evidence, approval — medium
