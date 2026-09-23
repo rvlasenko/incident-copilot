@@ -3,18 +3,14 @@ from typing import Annotated, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-# тип для Python и метаданные для библиотеки.
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 
 
-# DomainModel — общий базовый класс. Настройки задаются один раз, и все модели домена их наследуют.
-# frozen=True запрещает менять поля после создания объекта, extra="forbid" превращает лишнее поле в данных в ошибку.
 class DomainModel(BaseModel):
+    # extra="forbid" turns a typo or a forgotten field in fixtures into a validation error.
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-# StrEnum — enum, значения которого одновременно являются строками.
-# Pydantic сам превратит "degraded" из JSON в DependencyStatus.DEGRADED, а "broken" отклонит.
 class DependencyStatus(StrEnum):
     OPERATIONAL = "operational"
     DEGRADED = "degraded"
@@ -54,20 +50,13 @@ class MetricPoint(DomainModel):
     service: NonEmptyStr
     metric: MetricName
     timestamp: AwareDatetime
+    # Plain float: ints are coerced, so downstream code sees a single numeric type.
     value: float = Field(ge=0, allow_inf_nan=False)
-    # Любая метрика не может быть отрицательной
-    # Для mypy int и так подходит туда, где ожидается float: это отдельное правило системы типов Python.
-    # Pydantic с float превратит 320 в 320.0. С float | int он оставит int как есть, и дальше в коде будут значения двух разных типов, например в JSON и при сравнениях.
 
-    # error_rate — это доля, значит, она ещё и не больше 1
-    # Но это правило зависит от другого поля (metric), а Field видит только своё поле.
-    # Для таких проверок есть model_validator: он запускается после того, как все поля провалидированы, и видит объект целиком.
-
-    # mode="after" означает, что валидатор запускается после проверки полей, поэтому self.metric уже enum, а self.value уже float.
     @model_validator(mode="after")
     def check_rate_bounds(self) -> Self:
+        # The upper bound depends on the metric kind, so it cannot live in Field().
         if self.metric is MetricName.ERROR_RATE and self.value > 1:
-            # ValueError внутри валидатора Pydantic сам превращает в ValidationError с понятным описанием. Своё исключение здесь не нужно.
             raise ValueError(f"error_rate must be within [0, 1], got {self.value}")
         return self
 
@@ -76,15 +65,16 @@ class Service(DomainModel):
     name: NonEmptyStr
     owner_team: NonEmptyStr
     description: NonEmptyStr
-    # Pydantic сам превратит JSON-массив в кортеж. ... здесь означает «кортеж любой длины».
+    # Tuple, not list: frozen=True does not stop a list from being mutated in place.
     depends_on: tuple[NonEmptyStr, ...]
 
 
 class LogLevel(StrEnum):
-    ERROR = "ERROR"
-    WARNING = "WARNING"
-    INFO = "INFO"
+    # StrEnum compares alphabetically; never order levels with < or >.
     DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
 

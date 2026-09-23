@@ -4,6 +4,8 @@ Controlled agentic workflow для on-call инженеров: агент ище
 
 Темп: 3–4 ч/день, ~20–25 ч/неделю. Сложность: low / medium / high.
 
+Подход: итерациями — контракт → минимальная версия → тест → усложнять, когда появится причина. Проверки только под реальную модель угроз.
+
 ## Ядро: 4 результата, которые проект должен показать
 
 1. **Orchestration layer** на LangGraph: planner → retrieval → executor → verifier → answer, typed state, маршруты, budgets, явные termination outcomes
@@ -31,13 +33,21 @@ Controlled agentic workflow для on-call инженеров: агент ище
 ## Неделя 0 — разминка (3–4 дня)
 
 - [x] 0.1 Репо: `uv`, Python 3.13, `ruff`, `mypy --strict`, `pytest`, структура `src/incident_copilot/` — low
-- [ ] 0.2 Pydantic v2 модели домена (`Service`, `Dependency`, `Deploy`, `MetricPoint`, `LogEntry`) + загрузка фикстур через `pathlib` + проверка ссылок между файлами — low-medium
-- [ ] 0.3 asyncio: параллельный вызов нескольких «tools» через `asyncio.gather` + `asyncio.timeout` — medium
-- [ ] 0.4 pytest: fixtures, `parametrize`, тесты загрузчиков и ошибок валидации — low
+- [x] 0.2 Pydantic v2 модели домена (`Service`, `Dependency`, `Deploy`, `MetricPoint`, `LogEntry`) + загрузка фикстур через `pathlib` + проверка ссылок между файлами — low-medium
+  - Отложенные проверки фикстур (добавлять, когда появится причина):
+    - циклы в `depends_on` → вместе с tool, который обходит граф зависимостей
+    - дубли id деплоев / точек метрик → когда tools начнут агрегировать или считать метрики
+    - дубли в `depends_on`, совпадение имени сервиса и внешней зависимости → если это реально случится при правке данных
+- [x] 0.3 ~~asyncio~~ → перенесено в неделю 2 (executor с таймаутами)
+- [x] 0.4 ~~pytest~~ → по ходу, на тестах своего кода
 
 ## Неделя 1 — скелет orchestration (результат 1)
 
-- [ ] 1.1 FastAPI: `/health`, `POST /assist` (`AssistRequest` → stub) — low
+- [ ] 1.1 FastAPI — low
+  - `uv add "fastapi[standard]"`
+  - контракт: `AssistRequest(query)`, `AssistResponse(run_id, outcome, answer)`; команда и `case_id` — на неделе 2 вместе с RBAC
+  - `create_app()` в `src/incident_copilot/api/app.py`, `GET /health`, `POST /assist` → заглушка
+  - ручная проверка через `/docs`, тест через `TestClient`: 200 на валидный запрос, 422 на пустой `query`
 - [ ] 1.2 Контракты: `AgentState`, `Plan`, `RouteDecision`, `ToolCall`, `ToolResult`, `EvidenceItem`, `VerifierDecision`, `TerminationOutcome`, `Budget` — medium
 - [ ] 1.3 LangGraph: stub-ноды + conditional routing по `Route`, терминальные состояния — medium
 - [ ] 1.4 `LLMProvider` + OpenAI Planner со structured output + backend-валидация плана — medium
