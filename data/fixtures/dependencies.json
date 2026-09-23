@@ -1,0 +1,4 @@
+[
+  {"name": "psp-gateway", "status": "degraded", "since": "2026-09-22T13:58:00Z", "description": "Elevated timeouts from external payment service provider"},
+  {"name": "postgres-main", "status": "operational", "since": "2026-09-20T08:00:00Z", "description": "Primary PostgreSQL cluster"}
+]

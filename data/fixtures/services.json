@@ -1,0 +1,6 @@
+[
+  {"name": "checkout", "owner_team": "team-commerce", "description": "Cart checkout and order placement", "depends_on": ["payments", "inventory", "auth"]},
+  {"name": "payments", "owner_team": "team-payments", "description": "Payment authorization via external PSP", "depends_on": ["auth", "psp-gateway"]},
+  {"name": "inventory", "owner_team": "team-commerce", "description": "Stock levels and reservations", "depends_on": ["postgres-main"]},
+  {"name": "auth", "owner_team": "team-platform", "description": "Authentication and token issuing", "depends_on": ["postgres-main"]}
+]

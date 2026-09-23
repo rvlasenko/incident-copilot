@@ -1,0 +1,9 @@
+{"timestamp": "2026-09-22T10:59:12Z", "service": "inventory", "level": "ERROR", "message": "ReservationQueryError: column 'reserved_qty' does not exist", "version": "1.9.3", "trace_id": "t-3b72"}
+{"timestamp": "2026-09-22T11:03:40Z", "service": "inventory", "level": "ERROR", "message": "ReservationQueryError: column 'reserved_qty' does not exist", "version": "1.9.3", "trace_id": "t-3c01"}
+{"timestamp": "2026-09-22T12:33:05Z", "service": "auth", "level": "WARNING", "message": "Token cache miss rate above 40%", "version": "5.0.1", "trace_id": "t-5a10"}
+{"timestamp": "2026-09-22T12:41:00Z", "service": "auth", "level": "INFO", "message": "Rolled back to version 5.0.0", "version": "5.0.0", "trace_id": "t-5a44"}
+{"timestamp": "2026-09-22T13:58:41Z", "service": "payments", "level": "WARNING", "message": "psp-gateway request timeout after 3000ms", "version": "3.1.2", "trace_id": "t-9f1a"}
+{"timestamp": "2026-09-22T14:00:17Z", "service": "payments", "level": "ERROR", "message": "Payment authorization failed: psp-gateway timeout", "version": "3.1.2", "trace_id": "t-9f2c"}
+{"timestamp": "2026-09-22T14:00:18Z", "service": "checkout", "level": "ERROR", "message": "payments-api call failed: timeout after 2000ms", "version": "2.4.0", "trace_id": "t-9f2c"}
+{"timestamp": "2026-09-22T14:06:02Z", "service": "checkout", "level": "ERROR", "message": "payments-api call failed: timeout after 2000ms", "version": "2.4.0", "trace_id": "t-a011"}
+{"timestamp": "2026-09-22T14:07:30Z", "service": "checkout", "level": "INFO", "message": "Order placed successfully", "version": "2.4.0", "trace_id": "t-a0f3"}
