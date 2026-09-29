@@ -2,14 +2,10 @@ from uuid import uuid4
 
 import pytest
 
-from incident_copilot.agent.graph import AgentGraph, Node, build_graph, run_graph
-from incident_copilot.agent.state import AgentState, Plan, Route, RunOutcome
-
-
-def _graph_with_route(route: Route) -> AgentGraph:
-    return build_graph(
-        planner=lambda _state: Plan(route=route, rationale=f"forced {route}")
-    )
+from incident_copilot.agent.graph import build_graph, run_graph
+from incident_copilot.agent.nodes import PLANNER_UNAVAILABLE_ANSWER, Node
+from incident_copilot.agent.state import AgentState, Route, RunOutcome
+from tests.fakes import failing_planner, fixed_route_graph
 
 
 def _new_state() -> AgentState:
@@ -30,7 +26,7 @@ def test_every_route_finishes_with_expected_outcome(
 ) -> None:
     initial = _new_state()
 
-    final = run_graph(_graph_with_route(route), initial)
+    final = run_graph(fixed_route_graph(route), initial)
 
     assert final.outcome is expected_outcome
     assert final.answer
@@ -52,8 +48,23 @@ def test_every_route_finishes_with_expected_outcome(
 def test_route_determines_visited_nodes(
     route: Route, expected_path: list[Node]
 ) -> None:
-    updates = _graph_with_route(route).stream(_new_state(), stream_mode="updates")
+    updates = fixed_route_graph(route).stream(_new_state(), stream_mode="updates")
 
     visited = [node for update in updates for node in update]
 
     assert visited == expected_path
+
+
+def test_planner_failure_hands_off_without_running_other_nodes() -> None:
+    graph = build_graph(planner=failing_planner)
+
+    visited = [
+        node
+        for update in graph.stream(_new_state(), stream_mode="updates")
+        for node in update
+    ]
+    run = run_graph(graph, _new_state())
+
+    assert visited == [Node.PLANNER]
+    assert run.outcome is RunOutcome.HANDED_OFF
+    assert run.answer == PLANNER_UNAVAILABLE_ANSWER

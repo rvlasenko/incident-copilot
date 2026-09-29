@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from incident_copilot.domain.models import NonEmptyStr
 
 
+class GraphInvariantError(RuntimeError):
+    """The graph reached a state its own wiring should make impossible."""
+
+
 class AgentModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -49,6 +53,14 @@ class AgentState(AgentModel):
     @property
     def is_finished(self) -> bool:
         return self.outcome is not None
+
+    def require_plan(self) -> Plan:
+        """Return the plan for nodes and routers that only run after the planner."""
+        if self.plan is None:
+            raise GraphInvariantError(
+                f"Run {self.run_id} has no plan after the planner node"
+            )
+        return self.plan
 
 
 class FinishedRun(AgentModel):

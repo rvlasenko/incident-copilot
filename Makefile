@@ -1,4 +1,4 @@
-.PHONY: install fmt lint typecheck test check run
+.PHONY: install fmt lint typecheck test test-live check run
 
 install:
 	uv sync
@@ -17,7 +17,10 @@ typecheck:
 test:
 	uv run pytest
 
+test-live:
+	uv run pytest -m live
+
 check: lint typecheck test
 
 run:
-	uv run fastapi dev src/incident_copilot/api/app.py
+	uv run fastapi dev src/incident_copilot/api/main.py
