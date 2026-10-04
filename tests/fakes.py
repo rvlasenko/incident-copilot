@@ -16,7 +16,7 @@ def fixed_route_graph(route: Route) -> AgentGraph:
 
 
 def failing_planner(state: AgentState) -> Plan:
-    raise LLMError("simulated provider outage")
+    raise LLMError("SimulatedOutage", status_code=503)
 
 
 @dataclass(frozen=True)

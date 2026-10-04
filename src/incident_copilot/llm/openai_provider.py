@@ -30,7 +30,13 @@ class OpenAIProvider:
             OutputParserException,
             ValidationError,
         ) as exc:
-            raise LLMError(f"{type(exc).__name__}: {exc}") from exc
+            raise LLMError(type(exc).__name__, _status_code(exc)) from exc
         if not isinstance(result, schema):
-            raise LLMError(f"Expected {schema.__name__}, got {type(result).__name__}")
+            raise LLMError("UnexpectedResultType")
         return result
+
+
+def _status_code(exc: Exception) -> int | None:
+    # Only HTTP-level errors carry a status; timeouts and parse failures do not.
+    status = getattr(exc, "status_code", None)
+    return status if isinstance(status, int) else None

@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.vscode/
 .ruff_cache/
 .mypy_cache/
 .coverage
@@ -11,5 +12,5 @@ build/
 .DS_Store
 .env
 .index
-NOTES.md
+notes/
 PLAN.md

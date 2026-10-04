@@ -47,10 +47,11 @@ def make_plan_node(planner: Planner) -> NodeFunction:
         except LLMError as exc:
             # A planner failure ends the run cleanly instead of failing the request.
             logger.warning(
-                "Planner failed, handing off: run_id=%s prompt_version=%s error=%s",
+                "Planner failed, handing off: run_id=%s prompt_version=%s error_type=%s status_code=%s",
                 state.run_id,
                 PLANNER_PROMPT_VERSION,
-                exc,
+                exc.error_type,
+                exc.status_code,
             )
             return {
                 "outcome": RunOutcome.HANDED_OFF,

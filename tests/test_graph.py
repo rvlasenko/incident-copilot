@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 import pytest
@@ -68,3 +69,18 @@ def test_planner_failure_hands_off_without_running_other_nodes() -> None:
     assert visited == [Node.PLANNER]
     assert run.outcome is RunOutcome.HANDED_OFF
     assert run.answer == PLANNER_UNAVAILABLE_ANSWER
+
+
+def test_planner_failure_is_logged_with_error_type_and_status(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _new_state()
+
+    with caplog.at_level(logging.WARNING):
+        run_graph(build_graph(planner=failing_planner), state)
+
+    [record] = caplog.records
+    message = record.getMessage()
+    assert str(state.run_id) in message
+    assert "error_type=SimulatedOutage" in message
+    assert "status_code=503" in message
