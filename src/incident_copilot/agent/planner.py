@@ -32,8 +32,8 @@ class LLMPlanner:
     def __init__(self, provider: LLMProvider) -> None:
         self._provider = provider
 
-    def __call__(self, state: AgentState) -> Plan:
-        return self._provider.generate(
+    async def __call__(self, state: AgentState) -> Plan:
+        return await self._provider.generate(
             system=PLANNER_SYSTEM_PROMPT,
             user=f"Engineer request:\n<request>\n{state.query}\n</request>",
             schema=Plan,

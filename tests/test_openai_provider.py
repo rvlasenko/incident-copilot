@@ -14,6 +14,8 @@ from incident_copilot.config import LLMSettings
 from incident_copilot.llm.base import LLMError
 from incident_copilot.llm.openai_provider import OpenAIProvider
 
+pytestmark = pytest.mark.anyio
+
 LEAKED_KEY_FRAGMENT: Final = "sk-ab****wxyz"
 
 
@@ -57,25 +59,27 @@ def _provider() -> OpenAIProvider:
     return OpenAIProvider(settings)
 
 
-def test_http_error_keeps_status_and_drops_provider_message(
+async def test_http_error_keeps_status_and_drops_provider_message(
     rejecting_api_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_BASE_URL", rejecting_api_url)
 
     with pytest.raises(LLMError) as exc_info:
-        _provider().generate(system="s", user="u", schema=Plan)
+        await _provider().generate(system="s", user="u", schema=Plan)
 
     assert exc_info.value.status_code == 401
     assert "Authentication" in exc_info.value.error_type
     assert LEAKED_KEY_FRAGMENT not in str(exc_info.value)
 
 
-def test_connection_failure_has_no_status(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_connection_failure_has_no_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # A closed local port fails instantly, so the real error path runs without network access.
     monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:9/v1")
 
     with pytest.raises(LLMError) as exc_info:
-        _provider().generate(system="s", user="u", schema=Plan)
+        await _provider().generate(system="s", user="u", schema=Plan)
 
     assert "Connection" in exc_info.value.error_type
     assert exc_info.value.status_code is None

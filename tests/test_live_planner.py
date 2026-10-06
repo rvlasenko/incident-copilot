@@ -14,7 +14,7 @@ from incident_copilot.agent.state import AgentState, Plan, Route
 from incident_copilot.config import LLMSettings
 from incident_copilot.llm.openai_provider import OpenAIProvider
 
-pytestmark = pytest.mark.live
+pytestmark = [pytest.mark.live, pytest.mark.anyio]
 
 
 @pytest.fixture(scope="module")
@@ -43,10 +43,10 @@ def planner() -> LLMPlanner:
         ),
     ],
 )
-def test_real_planner_returns_valid_plan(
+async def test_real_planner_returns_valid_plan(
     planner: LLMPlanner, query: str, expected_route: Route
 ) -> None:
-    plan = planner(AgentState(run_id=uuid4(), query=query))
+    plan = await planner(AgentState(run_id=uuid4(), query=query))
 
     assert isinstance(plan, Plan)
     assert plan.route is expected_route, plan.rationale

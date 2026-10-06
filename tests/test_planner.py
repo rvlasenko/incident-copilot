@@ -7,6 +7,8 @@ from incident_copilot.agent.state import AgentState, Plan, Route
 from incident_copilot.llm.base import LLMError
 from tests.fakes import FakeProvider
 
+pytestmark = pytest.mark.anyio
+
 QUERY = "why did checkout error rate spike after 14:00?"
 
 
@@ -14,18 +16,18 @@ def _state() -> AgentState:
     return AgentState(run_id=uuid4(), query=QUERY)
 
 
-def test_planner_returns_provider_plan() -> None:
+async def test_planner_returns_provider_plan() -> None:
     plan = Plan(route=Route.INVESTIGATION, rationale="needs live metrics")
     planner = LLMPlanner(FakeProvider(result=plan))
 
-    assert planner(_state()) == plan
+    assert await planner(_state()) == plan
 
 
-def test_planner_sends_query_system_prompt_and_plan_schema() -> None:
+async def test_planner_sends_query_system_prompt_and_plan_schema() -> None:
     provider = FakeProvider(result=Plan(route=Route.INVESTIGATION, rationale="r"))
     planner = LLMPlanner(provider)
 
-    planner(_state())
+    await planner(_state())
 
     assert len(provider.calls) == 1
     call = provider.calls[0]
@@ -34,8 +36,8 @@ def test_planner_sends_query_system_prompt_and_plan_schema() -> None:
     assert call.schema is Plan
 
 
-def test_planner_propagates_provider_error() -> None:
+async def test_planner_propagates_provider_error() -> None:
     planner = LLMPlanner(FakeProvider(result=LLMError("OutputParserException")))
 
     with pytest.raises(LLMError):
-        planner(_state())
+        await planner(_state())

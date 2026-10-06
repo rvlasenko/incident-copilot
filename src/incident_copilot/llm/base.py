@@ -27,6 +27,6 @@ class LLMError(Exception):
 
 
 class LLMProvider(Protocol):
-    def generate[ModelT: BaseModel](
+    async def generate[ModelT: BaseModel](
         self, *, system: str, user: str, schema: type[ModelT]
     ) -> ModelT: ...

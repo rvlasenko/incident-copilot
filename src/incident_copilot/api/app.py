@@ -12,7 +12,7 @@ class HealthStatus(StrEnum):
     OK = "ok"
 
 
-def create_app(graph: AgentGraph) -> FastAPI:
+def create_app(graph: AgentGraph, *, run_timeout_seconds: float) -> FastAPI:
     app = FastAPI(title="incident-copilot")
 
     @app.get("/health")
@@ -20,12 +20,12 @@ def create_app(graph: AgentGraph) -> FastAPI:
         return {"status": HealthStatus.OK}
 
     @app.post("/assist")
-    def assist(request: AssistRequest) -> AssistResponse:
-        run = run_graph(graph, AgentState(run_id=uuid4(), query=request.query))
-        return AssistResponse(
-            run_id=run.run_id,
-            outcome=run.outcome,
-            answer=run.answer,
+    async def assist(request: AssistRequest) -> AssistResponse:
+        run = await run_graph(
+            graph,
+            AgentState(run_id=uuid4(), query=request.query),
+            timeout_seconds=run_timeout_seconds,
         )
+        return AssistResponse(run_id=run.run_id, outcome=run.outcome, answer=run.answer)
 
     return app

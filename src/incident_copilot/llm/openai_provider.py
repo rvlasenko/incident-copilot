@@ -18,12 +18,14 @@ class OpenAIProvider:
             max_retries=settings.llm_max_retries,
         )
 
-    def generate[ModelT: BaseModel](
+    async def generate[ModelT: BaseModel](
         self, *, system: str, user: str, schema: type[ModelT]
     ) -> ModelT:
         structured = self._chat.with_structured_output(schema)
         try:
-            result = structured.invoke([SystemMessage(system), HumanMessage(user)])
+            result = await structured.ainvoke(
+                [SystemMessage(system), HumanMessage(user)]
+            )
         except (
             ModelError,
             openai.OpenAIError,

@@ -1,10 +1,11 @@
 """What each step of the graph does. Nodes return partial state updates.
 
 Only the planner is real so far; the other nodes are stubs filled in by later weeks.
+Nodes that wait on I/O are async so a run can be cancelled while they wait.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -14,7 +15,7 @@ from incident_copilot.llm.base import LLMError
 
 logger = logging.getLogger(__name__)
 
-type Planner = Callable[[AgentState], Plan]
+type Planner = Callable[[AgentState], Awaitable[Plan]]
 type StateUpdate = dict[str, Any]
 
 PLANNER_UNAVAILABLE_ANSWER = (
@@ -23,9 +24,9 @@ PLANNER_UNAVAILABLE_ANSWER = (
 )
 
 
-class NodeFunction(Protocol):
+class AsyncNodeFunction(Protocol):
     # A Protocol, not Callable: LangGraph requires the parameter to be named `state`.
-    def __call__(self, state: AgentState) -> StateUpdate: ...
+    async def __call__(self, state: AgentState) -> StateUpdate: ...
 
 
 class Node(StrEnum):
@@ -38,12 +39,12 @@ class Node(StrEnum):
     HANDOFF = "handoff"
 
 
-def make_plan_node(planner: Planner) -> NodeFunction:
+def make_plan_node(planner: Planner) -> AsyncNodeFunction:
     """The planner is a dependency, so its node is built by a factory."""
 
-    def plan_node(state: AgentState) -> StateUpdate:
+    async def plan_node(state: AgentState) -> StateUpdate:
         try:
-            return {"plan": planner(state)}
+            return {"plan": await planner(state)}
         except LLMError as exc:
             # A planner failure ends the run cleanly instead of failing the request.
             logger.warning(

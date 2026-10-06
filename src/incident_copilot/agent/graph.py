@@ -5,7 +5,12 @@ planner -> retrieval_only: retrieval -> answer
         -> clarification:  clarify
         -> handoff:        handoff
         -> planner failed: END (run already finished as handed_off)
+
+The whole run is bounded by one time limit applied from outside the graph.
 """
+
+import asyncio
+import logging
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -22,7 +27,19 @@ from incident_copilot.agent.nodes import (
     verifier_node,
 )
 from incident_copilot.agent.routing import route_after_planner, route_after_retrieval
-from incident_copilot.agent.state import AgentState, FinishedRun, GraphInvariantError
+from incident_copilot.agent.state import (
+    AgentState,
+    FinishedRun,
+    GraphInvariantError,
+    RunOutcome,
+)
+
+logger = logging.getLogger(__name__)
+
+BUDGET_EXHAUSTED_ANSWER = (
+    "The time limit for this request was reached before an answer was ready. "
+    "Please retry or investigate manually."
+)
 
 type AgentGraph = CompiledStateGraph[AgentState, None, AgentState, AgentState]
 
@@ -49,10 +66,32 @@ def build_graph(planner: Planner) -> AgentGraph:
     return graph.compile()
 
 
-def run_graph(graph: AgentGraph, state: AgentState) -> FinishedRun:
-    # invoke() returns a plain dict, and the last node's update is never validated
+async def run_graph(
+    graph: AgentGraph, state: AgentState, *, timeout_seconds: float
+) -> FinishedRun:
+    """Run the graph to completion or until the time limit, whichever comes first."""
+    timeout = asyncio.timeout(timeout_seconds)
+    try:
+        async with timeout:
+            result = await graph.ainvoke(state)
+    except TimeoutError:
+        # A TimeoutError raised by a node itself is a bug to surface, not a spent budget.
+        if not timeout.expired():
+            raise
+        logger.warning(
+            "Run hit its time limit: run_id=%s timeout_seconds=%s",
+            state.run_id,
+            timeout_seconds,
+        )
+        return FinishedRun(
+            run_id=state.run_id,
+            outcome=RunOutcome.BUDGET_EXHAUSTED,
+            answer=BUDGET_EXHAUSTED_ANSWER,
+        )
+
+    # ainvoke() returns a plain dict, and the last node's update is never validated
     # on the way in to another node, so the result is validated here explicitly.
-    final = AgentState.model_validate(graph.invoke(state))
+    final = AgentState.model_validate(result)
     if final.outcome is None or final.answer is None:
         raise GraphInvariantError(f"Run {final.run_id} ended without an outcome")
     return FinishedRun(run_id=final.run_id, outcome=final.outcome, answer=final.answer)

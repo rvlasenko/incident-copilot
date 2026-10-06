@@ -1,5 +1,6 @@
 """Test doubles shared by several test modules."""
 
+import asyncio
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
@@ -10,12 +11,19 @@ from incident_copilot.llm.base import LLMError
 
 
 def fixed_route_graph(route: Route) -> AgentGraph:
-    return build_graph(
-        planner=lambda _state: Plan(route=route, rationale=f"forced {route}")
-    )
+    async def planner(state: AgentState) -> Plan:
+        return Plan(route=route, rationale=f"forced {route}")
+
+    return build_graph(planner=planner)
 
 
-def failing_planner(state: AgentState) -> Plan:
+async def hanging_planner(state: AgentState) -> Plan:
+    """Never answers, like an LLM API that accepted the request and went silent."""
+    await asyncio.sleep(3600)
+    raise AssertionError("unreachable: the run must be cancelled first")
+
+
+async def failing_planner(state: AgentState) -> Plan:
     raise LLMError("SimulatedOutage", status_code=503)
 
 
@@ -33,7 +41,7 @@ class FakeProvider:
     result: BaseModel | LLMError
     calls: list[ProviderCall] = field(default_factory=list)
 
-    def generate[ModelT: BaseModel](
+    async def generate[ModelT: BaseModel](
         self, *, system: str, user: str, schema: type[ModelT]
     ) -> ModelT:
         self.calls.append(ProviderCall(system=system, user=user, schema=schema))

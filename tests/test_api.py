@@ -5,12 +5,14 @@ from incident_copilot.agent.graph import build_graph
 from incident_copilot.agent.state import Route
 from incident_copilot.api.app import create_app
 from incident_copilot.api.schemas import MAX_QUERY_LENGTH
-from tests.fakes import failing_planner, fixed_route_graph
+from tests.fakes import failing_planner, fixed_route_graph, hanging_planner
 
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(fixed_route_graph(Route.RETRIEVAL_ONLY)))
+    return TestClient(
+        create_app(fixed_route_graph(Route.RETRIEVAL_ONLY), run_timeout_seconds=5)
+    )
 
 
 def test_assist_returns_run_id_and_answer(client: TestClient) -> None:
@@ -54,9 +56,22 @@ def test_assist_returns_outcome_of_finished_run(client: TestClient) -> None:
 
 
 def test_assist_planner_failure_is_a_handoff_not_a_server_error() -> None:
-    client = TestClient(create_app(build_graph(planner=failing_planner)))
+    client = TestClient(
+        create_app(build_graph(planner=failing_planner), run_timeout_seconds=5)
+    )
 
     response = client.post("/assist", json={"query": "why is checkout failing?"})
 
     assert response.status_code == 200
     assert response.json()["outcome"] == "handed_off"
+
+
+def test_assist_reports_time_limit_as_normal_response() -> None:
+    app = create_app(build_graph(planner=hanging_planner), run_timeout_seconds=0.05)
+
+    response = TestClient(app).post(
+        "/assist", json={"query": "why is checkout failing?"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "budget_exhausted"
