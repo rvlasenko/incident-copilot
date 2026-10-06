@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from incident_copilot.agent.graph import build_graph, run_graph
+from incident_copilot.agent.graph import AgentGraph, build_graph, run_graph
 from incident_copilot.agent.nodes import PLANNER_UNAVAILABLE_ANSWER, Node
 from incident_copilot.agent.state import AgentState, Route, RunOutcome
 from tests.fakes import failing_planner, fixed_route_graph
@@ -11,6 +11,11 @@ from tests.fakes import failing_planner, fixed_route_graph
 
 def _new_state() -> AgentState:
     return AgentState(run_id=uuid4(), query="why is checkout failing?")
+
+
+def _visited_nodes(graph: AgentGraph) -> list[str]:
+    updates = graph.stream(_new_state(), stream_mode="updates")
+    return [node for update in updates for node in update]
 
 
 @pytest.mark.parametrize(
@@ -49,21 +54,13 @@ def test_every_route_finishes_with_expected_outcome(
 def test_route_determines_visited_nodes(
     route: Route, expected_path: list[Node]
 ) -> None:
-    updates = fixed_route_graph(route).stream(_new_state(), stream_mode="updates")
-
-    visited = [node for update in updates for node in update]
-
-    assert visited == expected_path
+    assert _visited_nodes(fixed_route_graph(route)) == expected_path
 
 
 def test_planner_failure_hands_off_without_running_other_nodes() -> None:
     graph = build_graph(planner=failing_planner)
 
-    visited = [
-        node
-        for update in graph.stream(_new_state(), stream_mode="updates")
-        for node in update
-    ]
+    visited = _visited_nodes(graph)
     run = run_graph(graph, _new_state())
 
     assert visited == [Node.PLANNER]
