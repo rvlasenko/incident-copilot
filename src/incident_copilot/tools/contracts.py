@@ -1,9 +1,11 @@
-"""Contracts of the tool layer: what a tool request and a tool answer look like.
+"""Contracts of the tool layer: a tool request, a tool answer and a tool's catalog card.
 
 This module must not import from `agent`: the agent state will hold tool
 results, so the dependency goes agent -> tools only.
 """
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Self
 from uuid import UUID
@@ -11,6 +13,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from incident_copilot.domain.models import NonEmptyStr
+
+
+class ToolError(Exception):
+    """A tool got valid arguments but cannot answer, e.g. the service does not exist.
+
+    Raised inside a tool only. The executor is the boundary that turns it into
+    a ToolResult, so the message must be safe to show to the engineer.
+    """
 
 
 class ToolModel(BaseModel):
@@ -56,3 +66,18 @@ class ToolResult(ToolModel):
         elif self.data is not None or self.error is None:
             raise ValueError("a failed result must carry an error and no data")
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class ToolSpec[InputT: BaseModel, OutputT: BaseModel]:
+    """Everything the executor needs to run one tool without knowing which tool it is."""
+
+    name: ToolName
+    # Written for an LLM that will later pick tools from the catalog.
+    description: str
+    input_model: type[InputT]
+    output_model: type[OutputT]
+    timeout_seconds: float
+    # Async even over in-memory fixtures: a real tool waits on a network call,
+    # and only an awaiting call can be cancelled by a timeout.
+    handler: Callable[[InputT], Awaitable[OutputT]]
