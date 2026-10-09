@@ -24,7 +24,6 @@ class Route(StrEnum):
 
 class RunOutcome(StrEnum):
     COMPLETED = "completed"
-    RETRIEVAL_ONLY = "retrieval_only"
     CLARIFICATION_NEEDED = "clarification_needed"
     REFUSED = "refused"
     HANDED_OFF = "handed_off"

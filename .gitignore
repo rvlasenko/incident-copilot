@@ -13,4 +13,5 @@ build/
 .env
 .index
 notes/
+scripts/
 PLAN.md
