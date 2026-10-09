@@ -2,6 +2,9 @@ from collections.abc import AsyncIterator
 
 import pytest
 
+from incident_copilot.domain.loaders import FixtureDataset, load_dataset
+from tests.factories import REPO_FIXTURES_DIR
+
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
@@ -18,3 +21,9 @@ async def shared_event_loop(anyio_backend: str) -> AsyncIterator[None]:
     test fails with "Event loop is closed".
     """
     yield
+
+
+@pytest.fixture(scope="session")
+def repo_dataset() -> FixtureDataset:
+    """The repository fixtures, loaded once; safe to share because the dataset is immutable."""
+    return load_dataset(REPO_FIXTURES_DIR)

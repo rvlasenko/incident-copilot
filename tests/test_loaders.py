@@ -17,8 +17,7 @@ from incident_copilot.domain.loaders import (
     load_jsonl,
 )
 from incident_copilot.domain.models import Deploy, DeployStatus, LogEntry
-
-REPO_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "data" / "fixtures"
+from tests.factories import REPO_FIXTURES_DIR
 
 VALID_DEPLOY: dict[str, Any] = {
     "id": "dep-1",
