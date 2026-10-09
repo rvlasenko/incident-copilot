@@ -10,7 +10,7 @@ from enum import StrEnum
 from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from incident_copilot.domain.models import NonEmptyStr
 
@@ -30,12 +30,28 @@ class ToolModel(BaseModel):
 class ToolName(StrEnum):
     # A tool is added here in the same step that implements it.
     GET_SERVICE_HEALTH = "get_service_health"
+    GET_RECENT_DEPLOYS = "get_recent_deploys"
 
 
 class ToolStatus(StrEnum):
     OK = "ok"
     ERROR = "error"
     TIMEOUT = "timeout"
+
+
+class ServiceWindowInput(ToolModel):
+    """Arguments of tools that look at one service over a time range; both ends included."""
+
+    service: NonEmptyStr
+    start: AwareDatetime
+    end: AwareDatetime
+
+    @model_validator(mode="after")
+    def check_window_order(self) -> Self:
+        # The planner may swap the ends; an inverted window would silently match nothing.
+        if self.start > self.end:
+            raise ValueError("start must not be after end")
+        return self
 
 
 class ToolCall(ToolModel):
