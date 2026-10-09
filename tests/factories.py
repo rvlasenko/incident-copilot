@@ -13,6 +13,8 @@ from incident_copilot.domain.loaders import FixtureDataset
 from incident_copilot.domain.models import (
     Deploy,
     DeployStatus,
+    LogEntry,
+    LogLevel,
     MetricName,
     MetricPoint,
     Service,
@@ -55,16 +57,34 @@ def metric(
     )
 
 
+def log(
+    service_name: str,
+    timestamp: datetime,
+    level: LogLevel,
+    message: str = "something happened",
+    trace_id: str = "t-1",
+) -> LogEntry:
+    return LogEntry(
+        timestamp=timestamp,
+        service=service_name,
+        level=level,
+        message=message,
+        version="1.0.0",
+        trace_id=trace_id,
+    )
+
+
 def dataset(
     *,
     services: Iterable[str] = (),
     deploys: Iterable[Deploy] = (),
     metrics: Iterable[MetricPoint] = (),
+    logs: Iterable[LogEntry] = (),
 ) -> FixtureDataset:
     return FixtureDataset(
         services=tuple(service(name) for name in services),
         dependencies=(),
         deploys=tuple(deploys),
         metrics=tuple(metrics),
-        logs=(),
+        logs=tuple(logs),
     )

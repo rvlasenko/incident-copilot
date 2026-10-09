@@ -245,6 +245,30 @@ those two values.
   would validate the choice and add mandatory tools. Only the call-building
   function changes; executor and tools stay as they are.
 
+### D19. Provenance comes from the call, timestamps from the records
+
+**Status:** Accepted (2026-10-09)
+
+Tool outputs carry no `source` or `fetched_at` fields.
+
+- **Source:** every `ToolResult` already has `tool` and `call_id`. Evidence
+  (week 3) will reference the `call_id`, which leads to the tool and its
+  arguments.
+- **Time:** fixtures have no meaningful fetch time. The time that matters is
+  on each record: `measured_at`, `deployed_at`, log `timestamp`.
+- **Revisit:** when a real data source can return cached or delayed data, the
+  fetch time becomes evidence and belongs in the result.
+
+### D20. Log levels are ordered by severity, never by string
+
+**Status:** Accepted (2026-10-09)
+
+`LogLevel` is a `StrEnum`, and string comparison would put `CRITICAL` below
+`DEBUG`. Filtering uses `LogLevel.severity`, which follows declaration order.
+
+- **Invariant:** members stay declared from least to most severe
+  (`test_models.py` guards it).
+
 ---
 
 ## Intentionally unsupported

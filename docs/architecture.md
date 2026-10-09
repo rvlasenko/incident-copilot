@@ -81,9 +81,9 @@ AgentState: ToolResult per call  ◄──────────────�
 ```
 
 Built today: `ToolCall`, `ToolResult`, `ToolSpec`, `ServiceWindowInput`,
-`ToolError` in `tools/contracts.py`; `ServiceHealthTool` and
-`RecentDeploysTool`. Planned: `search_logs`, `get_dependency_status` (2.2),
-registry, `Tool` protocol and executor (2.3), retry policy (2.4), audit log
+`ToolError` in `tools/contracts.py`; `require_known_service` in
+`tools/checks.py`; `ServiceHealthTool`, `RecentDeploysTool`, `SearchLogsTool`.
+Planned: `get_dependency_status` (2.2), registry, `Tool` protocol and executor (2.3), retry policy (2.4), audit log
 (2.5).
 
 Rules every tool follows:
@@ -141,10 +141,11 @@ call the real API and are skipped without a key.
 ## Setup and running
 
 ```bash
-uv sync                    # dependencies into .venv
+make install               # uv sync: dependencies into .venv
+make fmt                   # format and auto-fix lint findings
 make check                 # lint, types, tests; run before every commit
 make test-live             # real OpenAI calls; needs OPENAI_API_KEY
-uv run uvicorn incident_copilot.api.main:app --reload
+make run                   # dev server with reload (fastapi dev)
 ```
 
 Manual playground scripts in `scripts/` call single tools on the repository

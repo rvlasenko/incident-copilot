@@ -31,6 +31,7 @@ class ToolName(StrEnum):
     # A tool is added here in the same step that implements it.
     GET_SERVICE_HEALTH = "get_service_health"
     GET_RECENT_DEPLOYS = "get_recent_deploys"
+    SEARCH_LOGS = "search_logs"
 
 
 class ToolStatus(StrEnum):

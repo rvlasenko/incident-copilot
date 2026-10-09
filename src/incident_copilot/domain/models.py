@@ -70,12 +70,17 @@ class Service(DomainModel):
 
 
 class LogLevel(StrEnum):
-    # StrEnum compares alphabetically; never order levels with < or >.
+    # StrEnum compares alphabetically; never order levels with < or >, use severity.
+    # Members are declared from least to most severe; severity relies on that order.
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
+
+    @property
+    def severity(self) -> int:
+        return tuple(LogLevel).index(self)
 
 
 class LogEntry(DomainModel):
