@@ -6,6 +6,7 @@ from pydantic import AwareDatetime
 
 from incident_copilot.domain.loaders import FixtureDataset
 from incident_copilot.domain.models import MetricName, NonEmptyStr
+from incident_copilot.tools.checks import require_known_service
 from incident_copilot.tools.contracts import ToolError, ToolModel, ToolName, ToolSpec
 
 TIMEOUT_SECONDS: Final = 5.0
@@ -38,10 +39,8 @@ class ServiceHealth(ToolModel):
 class ServiceHealthTool:
     def __init__(self, dataset: FixtureDataset) -> None:
         self._dataset = dataset
-        self._known_services = {service.name for service in dataset.services}
 
     def spec(self) -> ToolSpec[ServiceHealthInput, ServiceHealth]:
-        """The catalog card the executor uses to call this tool."""
         return ToolSpec(
             name=ToolName.GET_SERVICE_HEALTH,
             description=DESCRIPTION,
@@ -52,8 +51,7 @@ class ServiceHealthTool:
         )
 
     async def run(self, args: ServiceHealthInput) -> ServiceHealth:
-        if args.service not in self._known_services:
-            raise ToolError(f"Unknown service '{args.service}'")
+        require_known_service(self._dataset, args.service)
 
         health = ServiceHealth(
             service=args.service,

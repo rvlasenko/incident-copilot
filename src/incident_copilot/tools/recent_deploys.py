@@ -6,9 +6,9 @@ from pydantic import AwareDatetime
 
 from incident_copilot.domain.loaders import FixtureDataset
 from incident_copilot.domain.models import DeployStatus, NonEmptyStr
+from incident_copilot.tools.checks import require_known_service
 from incident_copilot.tools.contracts import (
     ServiceWindowInput,
-    ToolError,
     ToolModel,
     ToolName,
     ToolSpec,
@@ -39,10 +39,8 @@ class RecentDeploys(ToolModel):
 class RecentDeploysTool:
     def __init__(self, dataset: FixtureDataset) -> None:
         self._dataset = dataset
-        self._known_services = {service.name for service in dataset.services}
 
     def spec(self) -> ToolSpec[ServiceWindowInput, RecentDeploys]:
-        """The catalog card the executor uses to call this tool."""
         return ToolSpec(
             name=ToolName.GET_RECENT_DEPLOYS,
             description=DESCRIPTION,
@@ -53,8 +51,7 @@ class RecentDeploysTool:
         )
 
     async def run(self, args: ServiceWindowInput) -> RecentDeploys:
-        if args.service not in self._known_services:
-            raise ToolError(f"Unknown service '{args.service}'")
+        require_known_service(self._dataset, args.service)
 
         in_window = sorted(
             (
