@@ -1,32 +1,34 @@
 # Architecture
 
 An assistant for on-call engineers. It takes a question about an incident,
-decides how to handle it, gathers evidence from runbooks and live operational
-data, and answers with a fixed set of outcomes. The reasons behind the shape
-below are in [`decisions.md`](decisions.md).
+decides how to handle it, gathers evidence from runbooks and operational data,
+and answers with one of a fixed set of outcomes.
 
-Current state: week 2 of `PLAN.md`. The graph and planner are real; retrieval,
-executor, verifier and answer are stubs; two read-only tools exist but are not
-wired into the graph yet.
+This page describes the system as it is in the code. Reasons behind the shape
+are in [`decisions.md`](decisions.md); progress and next steps are in
+`PLAN.md` only.
 
 ## Components
 
 | Package | Role | Depends on |
 |---|---|---|
 | `api/` | HTTP boundary: request validation, one run per request | `agent` |
-| `agent/` | the graph: state, planner, nodes, routers, run time limit | `llm`, `tools` (from 2.3) |
+| `agent/` | the graph: state, planner, nodes, routers, run time limit | `llm` |
 | `llm/` | provider-neutral structured LLM calls (`LLMProvider`) | vendor SDK |
 | `tools/` | typed read-only adapters over operational data | `domain` |
 | `domain/` | domain models and fixture loading | nothing internal |
 | `config.py` | settings from environment and `.env` | — |
 
-Dependencies point one way: `api → agent → tools → domain`. `tools` must not
-import from `agent`, because agent state will hold tool results.
+Dependencies point one way: `api → agent → tools → domain`. `tools` never
+imports from `agent`, so agent state can hold tool results without an import
+cycle.
 
 `api/main.py` is the only place that reads settings and builds real
-dependencies (OpenAI provider, later the fixture dataset and tool registry).
-Everything else receives its dependencies as arguments, which is how tests
-replace the LLM and the data.
+dependencies such as the OpenAI provider. Everything else receives its
+dependencies as arguments, which is how tests replace the LLM and the data.
+
+Retrieval, executor and verifier nodes are stubs, and the tools are not called
+from the graph.
 
 ## Request flow
 
@@ -64,33 +66,25 @@ LangGraph merges them.
   `GraphInvariantError` instead of failing later with an unclear error.
 - `run_graph` validates the final state explicitly (D5).
 
-## Tool layer
+## Tools
 
-```
-                build_tool_calls(plan)            (2.3)
-                        │ list[ToolCall]          raw arguments
-                        ▼
-executor ── for each call ──────────────────────────────────────────┐
-  │ registry[tool] → ToolSpec                                       │
-  │ input_model.model_validate(arguments)    invalid → error        │
-  │ handler(args) under timeout_seconds      ToolError → error      │
-  │                                          timeout   → timeout    │
-  │ output_model check, model_dump()         ok + data              │
-  ▼                                                                 │
-AgentState: ToolResult per call  ◄──────────────────────────────────┘
-```
+| Tool | Input | Output |
+|---|---|---|
+| `get_service_health` | service, moment | latest error rate and p99 latency, each with `measured_at` |
+| `get_recent_deploys` | service, window | deploys in the window, oldest first, without author |
+| `search_logs` | service, window, minimum level | log records, oldest first |
+| `get_dependency_status` | service | internal services by name; external dependencies with status |
 
-Built today: `ToolCall`, `ToolResult`, `ToolSpec`, `ServiceWindowInput`,
-`ToolError` in `tools/contracts.py`; `require_known_service` in
-`tools/checks.py`; `ServiceHealthTool`, `RecentDeploysTool`, `SearchLogsTool`,
-`DependencyStatusTool`. Planned: registry, `Tool` protocol and executor (2.3), retry policy (2.4), audit log
-(2.5).
+Contracts live in `tools/contracts.py`: `ToolCall` (a request with raw
+arguments), `ToolResult` (status `ok`, `error` or `timeout`, with either data
+or an error message), `ToolSpec` (the card a caller uses to validate
+arguments, run the tool and check its output), and `ToolError`.
 
-Rules every tool follows:
+Every tool follows the same rules:
 
 1. Receives its data source in the constructor; never loads it itself.
 2. `run` is `async`, even over in-memory data, so a timeout can cancel it.
-3. Reads only; never changes state anywhere (required for retries, D16).
+3. Reads only; never changes state anywhere (D16).
 4. Returns a typed output model with the minimum fields needed (D14).
 5. Raises `ToolError` with a message safe to show; never returns an empty
    answer that could be mistaken for "healthy" (D13).
@@ -102,11 +96,8 @@ Rules every tool follows:
 - The run-level `asyncio.timeout` cancels the task. Cancellation reaches only
   code that is awaiting; blocking synchronous work inside a node is not
   interrupted. Nodes that wait on I/O must therefore be `async`.
-- Per-tool timeouts (2.3) are nested inside the run limit. Whichever expires
-  first wins: a tool timeout becomes a `ToolResult` and the run continues; the
-  run limit ends the run.
-- `FixtureDataset` is immutable and shared by all requests and tools without
-  locks.
+- `FixtureDataset` is immutable and can be shared by requests and tools
+  without locks.
 - Tests share one event loop for the whole session (`tests/conftest.py`)
   because the OpenAI client pools connections process-wide; a connection
   opened on a closed loop fails the next test.
@@ -118,9 +109,9 @@ Rules every tool follows:
 | Invalid request body | FastAPI validation | 422 |
 | LLM error after client retries | planner node | `HANDED_OFF`, warning log |
 | Run exceeds time limit | `run_graph` | `BUDGET_EXHAUSTED`, warning log |
-| Tool error or tool timeout | executor (2.3) | `ToolResult` in state |
 | Broken graph invariant | raised | 500 |
-| Broken fixture file | `load_dataset` | `FixtureError`; from 2.3 the dataset loads at startup, so the process does not start |
+| Tool cannot answer | the tool | `ToolError` |
+| Broken fixture file | `load_dataset` | `FixtureError` naming the file and line or item |
 
 ## Configuration
 
@@ -148,10 +139,10 @@ make test-live             # real OpenAI calls; needs OPENAI_API_KEY
 make run                   # dev server with reload (fastapi dev)
 ```
 
-Manual playground scripts in `scripts/` call single tools on the repository
-fixtures, for example `uv run python scripts/try_recent_deploys.py`.
+Scripts in `scripts/` call single tools on the repository fixtures, for
+example `uv run python scripts/try_recent_deploys.py`.
 
-There is no deployment yet; the service runs locally only.
+The service runs locally only; there is no deployment.
 
 ## Testing approach
 

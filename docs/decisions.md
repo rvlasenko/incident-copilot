@@ -2,19 +2,23 @@
 
 Why the code is shaped the way it is. Each entry records the decision, the
 alternatives that were rejected, and the price paid. Code explains *what*;
-this file explains *why*, so a change here should come with a new or updated
-entry.
+this file explains *why*, so a change in behavior should come with a new or
+updated entry. Progress and next steps are tracked in `PLAN.md`, not here.
 
-Status values: **Accepted** (in the code), **Planned** (agreed, lands in the
-named step), **Superseded** (kept for history, points to the replacement).
+Entries are numbered in the order they were made; numbers never change.
+
+Status values:
+
+- **Accepted**: decided; the code follows it or will follow it when that part
+  is built.
+- **Proposed**: written down for discussion, not decided yet.
+- **Superseded**: kept for history, points to the replacement.
 
 ---
 
-## Orchestration (week 1)
-
 ### D1. The LLM proposes, code decides
 
-**Status:** Accepted
+**Area:** orchestration · **Status:** Accepted
 
 The planner LLM returns a `Plan` (route + rationale). Which node runs next is
 decided by plain functions in `agent/routing.py` that read the plan.
@@ -28,7 +32,7 @@ decided by plain functions in `agent/routing.py` that read the plan.
 
 ### D2. Planner failure is a handoff, not a server error
 
-**Status:** Accepted
+**Area:** orchestration · **Status:** Accepted
 
 Any `LLMError` from the planner ends the run as `HANDED_OFF` with HTTP 200 and
 a fixed answer telling the engineer to investigate manually.
@@ -41,7 +45,7 @@ a fixed answer telling the engineer to investigate manually.
 
 ### D3. One external time limit around the whole run
 
-**Status:** Accepted (step 1.5, 2026-10-06)
+**Area:** orchestration · **Status:** Accepted (2026-10-06)
 
 `run_graph` wraps `graph.ainvoke` in `asyncio.timeout(RUN_TIMEOUT_SECONDS)`.
 On expiry the run ends as `BUDGET_EXHAUSTED` with HTTP 200.
@@ -55,22 +59,23 @@ On expiry the run ends as `BUDGET_EXHAUSTED` with HTTP 200.
 - **Invariant:** a `TimeoutError` raised by a node itself is re-raised, not
   reported as a spent budget; only an expired run-level limit becomes
   `BUDGET_EXHAUSTED`.
-- **Not covered yet:** step limit against loops (3.5), token or money budget
-  (not planned), persisting the outcome of a timed-out run (4.3).
+- **Not covered:** a step limit (needed once the graph has a loop), token or
+  money budgets, and recording the outcome of a timed-out run anywhere but the
+  response.
 
-### D4. Contracts appear in the step that uses them
+### D4. Contracts appear when something uses them
 
-**Status:** Accepted
+**Area:** orchestration · **Status:** Accepted
 
-`AgentState` grows only when a node needs a new field. Tool contracts were
-added in week 2, evidence contracts come in week 3.
+A model or field is added in the same change as the code that reads it.
+`AgentState` has no tool or evidence fields until a node fills them.
 
 - **Why:** fields without a consumer get their meaning guessed later and
   usually guessed wrong.
 
 ### D5. The final state is validated explicitly
 
-**Status:** Accepted
+**Area:** orchestration · **Status:** Accepted
 
 `graph.ainvoke` returns a plain dict, and the last node's update is never
 validated on the way into another node. `run_graph` validates it into
@@ -79,36 +84,15 @@ validated on the way into another node. `run_graph` validates it into
 
 ### D6. Fixture validation follows a narrow threat model
 
-**Status:** Accepted
+**Area:** data · **Status:** Accepted
 
 Fixtures are edited by hand, so the realistic failure is a typo. The loaders
 check schemas (`extra="forbid"`) and cross-file references, and nothing else.
-Cycle and duplicate checks are listed in `PLAN.md` as deferred until a tool
-depends on them.
-
-### D18. `RunOutcome` says how a run ended, not which path it took
-
-**Status:** Accepted (2026-10-09)
-
-A successful run ends as `COMPLETED` on both the `retrieval_only` and the
-`investigation` route. The former `RETRIEVAL_ONLY` outcome was removed: no
-node ever set it.
-
-- **Why:** the path is already recorded in `Plan.route`. Repeating it in the
-  outcome creates two fields that can contradict each other, for example an
-  `investigation` route with a `RETRIEVAL_ONLY` outcome.
-- **If the engineer needs to see the path:** expose the route in the API
-  response instead of adding outcome values.
-- **Documents found by retrieval** are part of the answer (citations, 4.1),
-  not of the outcome.
-
----
-
-## Tool layer (week 2)
+Cycle and duplicate checks are added only when a tool depends on them.
 
 ### D7. No access control by owner team
 
-**Status:** Accepted (2026-10-07)
+**Area:** tools · **Status:** Accepted (2026-10-07)
 
 `services.json` keeps `owner_team` as reference data, but no tool checks who
 is asking.
@@ -120,7 +104,7 @@ is asking.
 
 ### D8. A failed tool call is a result, not an exception
 
-**Status:** Accepted for contracts; executor boundary planned for 2.3
+**Area:** tools · **Status:** Accepted
 
 Inside a tool, an unanswerable request raises `ToolError`. The executor is the
 boundary that turns it, a timeout or a validation failure into a `ToolResult`
@@ -136,62 +120,62 @@ with status `error` or `timeout`. Nothing raised by a tool leaves the executor.
 
 ### D9. `ToolResult.data` is a plain dict
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 Each tool has a typed `output_model`, but the result stored in agent state is
 a dict.
 
-- **Why:** agent state will be checkpointed to PostgreSQL in week 4 and must
-  stay JSON-serializable without a registry of result types.
+- **Why:** agent state is meant to be checkpointed to PostgreSQL and must stay
+  JSON-serializable without a registry of result types.
 - **Price:** readers of `data` lose static types. Mitigation: the executor
   validates the handler's output against `output_model` before converting it,
   so the dict shape is guaranteed at write time.
 
 ### D10. Tools share a form, not a parent class
 
-**Status:** Accepted; `Tool` protocol planned for 2.3
+**Area:** tools · **Status:** Accepted (2026-10-09)
 
 Every tool is a class with `run(args)` and `spec() -> ToolSpec`. There is no
-`BaseTool`. The executor only sees `ToolSpec` cards.
+`BaseTool`. Callers only see `ToolSpec` cards.
 
 - **Why:** a base class tends to collect shared code until understanding one
-  tool requires reading two classes. A `Protocol` documents the required shape
-  and lets mypy check it without inheritance, the same way `LLMProvider` works.
-- **Planned (2.3):** `Tool` protocol in `tools/contracts.py`, used by the
-  registry builder, plus a short "how to add a tool" guide in that module.
+  tool requires reading two classes.
+- **How the shape is enforced:** a `Tool` protocol in `tools/contracts.py`,
+  introduced together with the registry that accepts tools. A `Protocol`
+  documents the required shape and lets mypy check it without inheritance,
+  the same way `LLMProvider` works.
 
 ### D11. Tools are infrastructure adapters
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 A tool class adapts one data source to a typed answer. Filtering by window or
 picking the latest point is query logic that a real backend (Prometheus, SQL)
-would do itself. Decisions about causes belong to the planner, routers and,
-from week 3, the verifier.
+would do itself. Decisions about causes belong to the planner, routers and
+verifier.
 
-- **Rejected for now:** a separate "data source" interface under each tool.
-  When a real API replaces the fixtures, the adapter class is replaced as a
-  whole; agent and executor code do not change.
+- **Rejected:** a separate "data source" interface under each tool. When a
+  real API replaces the fixtures, the adapter class is replaced as a whole;
+  agent and executor code do not change.
 - **Dependency injection:** each tool receives `FixtureDataset` in its
   constructor and never loads files itself, so tests pass small explicit
   datasets.
 
 ### D12. Time is always explicit
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 Fixtures describe one frozen day, so there is no meaningful "now". Every tool
-takes the moment or window it is asked about.
+that depends on time takes the moment or window it is asked about.
 
-- `get_recent_deploys` and the planned `search_logs` take `ServiceWindowInput`
-  (both ends included; `start > end` is rejected because an LLM planner may
-  swap them).
-- `get_service_health` takes a single moment for now. The executor will pass
-  the end of the window.
+- `get_recent_deploys` and `search_logs` take `ServiceWindowInput` (both ends
+  included; `start > end` is rejected because an LLM planner may swap them).
+- `get_service_health` takes a single moment. A caller working with a window
+  passes its end.
 
 ### D13. Empty answers versus errors
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 | Situation | Result |
 |---|---|
@@ -202,58 +186,73 @@ takes the moment or window it is asked about.
 
 ### D14. Field minimization
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 Tool outputs drop fields that do not help find a cause. Example: deploy
 `author` is not returned, so a person's name never reaches the LLM prompt.
 
 ### D15. Stale readings are returned with their timestamp
 
-**Status:** Accepted
+**Area:** tools · **Status:** Accepted
 
 `get_service_health` returns the latest point at or before the moment, even
 if it is hours old, together with `measured_at`. Judging freshness is the
-verifier's job (week 3).
+verifier's job.
 
 - **Why:** a service that crashes often stops reporting metrics, so the last
   point being "before the incident" is a real situation, not a fixture quirk.
 
 ### D16. Automatically retried tools must be read-only
 
-**Status:** Planned (2.4)
+**Area:** tools · **Status:** Proposed
 
 The retry policy re-calls a tool after a transient failure. That is safe only
 because every current tool reads data and changes nothing.
 
-- **Invariant:** a tool with side effects (`propose_rollback`, week 4) is
+- **Invariant:** a tool with side effects, such as `propose_rollback`, is
   never retried automatically.
-- **Planned:** a retry keeps the original `call_id`; the attempt number goes
-  to the audit log, so one logical call stays one call in the trajectory.
+- **Retry identity:** a retry keeps the original `call_id`; the attempt number
+  goes to the audit log, so one logical call stays one call in the trajectory.
 
 ### D17. Which tools run is decided by code
 
-**Status:** Planned (2.3), proposed and not yet confirmed
+**Area:** tools · **Status:** Proposed
 
 For the `investigation` route, a small function builds the four `ToolCall`s
 from the plan's target service and time window. The planner only extracts
 those two values.
 
 - **Why:** four cheap read-only tools, all needed for an investigation.
-- **Price:** the week-5 "tool selection" metric becomes trivial.
+- **Price:** the evaluation's tool-selection metric becomes trivial.
 - **Migration path:** with many tools, the planner would pick from the catalog
   (each `ToolSpec` already carries `description` and an input schema) and code
   would validate the choice and add mandatory tools. Only the call-building
   function changes; executor and tools stay as they are.
 
+### D18. `RunOutcome` says how a run ended, not which path it took
+
+**Area:** orchestration · **Status:** Accepted (2026-10-09)
+
+A successful run ends as `COMPLETED` on both the `retrieval_only` and the
+`investigation` route. The former `RETRIEVAL_ONLY` outcome was removed: no
+node ever set it.
+
+- **Why:** the path is already recorded in `Plan.route`. Repeating it in the
+  outcome creates two fields that can contradict each other, for example an
+  `investigation` route with a `RETRIEVAL_ONLY` outcome.
+- **If the engineer needs to see the path:** expose the route in the API
+  response instead of adding outcome values.
+- **Documents found by retrieval** belong to the answer as citations, not to
+  the outcome.
+
 ### D19. Provenance comes from the call, timestamps from the records
 
-**Status:** Accepted (2026-10-09)
+**Area:** tools · **Status:** Accepted (2026-10-09)
 
 Tool outputs carry no `source` or `fetched_at` fields.
 
 - **Source:** every `ToolResult` already has `tool` and `call_id`. Evidence
-  (week 3) will reference the `call_id`, which leads to the tool and its
-  arguments.
+  records reference the `call_id`, which leads to the tool and its arguments.
 - **Time:** fixtures have no meaningful fetch time. The time that matters is
   on each record: `measured_at`, `deployed_at`, log `timestamp`.
 - **Revisit:** when a real data source can return cached or delayed data, the
@@ -261,7 +260,7 @@ Tool outputs carry no `source` or `fetched_at` fields.
 
 ### D20. Log levels are ordered by severity, never by string
 
-**Status:** Accepted (2026-10-09)
+**Area:** domain · **Status:** Accepted (2026-10-09)
 
 `LogLevel` is a `StrEnum`, and string comparison would put `CRITICAL` below
 `DEBUG`. Filtering uses `LogLevel.severity`, which follows declaration order.
@@ -271,7 +270,7 @@ Tool outputs carry no `source` or `fetched_at` fields.
 
 ### D21. Internal and external dependencies are reported separately
 
-**Status:** Accepted (2026-10-13)
+**Area:** tools · **Status:** Accepted (2026-10-13)
 
 `get_dependency_status` returns two lists: internal services by name, and
 external dependencies with status, `since` and description.
@@ -290,12 +289,12 @@ external dependencies with status, `since` and description.
 
 ## Intentionally unsupported
 
-| Not supported | Why | Revisit |
+| Not supported | Why | Revisit when |
 |---|---|---|
-| Access control | single user, read-only data (D7) | real users |
-| Row limit on log search | 9 log lines in fixtures | real log volume |
-| Health trend or baseline | one value per metric is enough until the verifier compares against normal | 3.4 |
-| Dependency status history | fixtures hold only the current status with `since` | real status API |
-| Step limit, token budget | no loop in the graph yet | 3.5 |
-| Persisting runs, resuming | no checkpointer yet | 4.3 |
-| API authentication | local single-user tool | deployment |
+| Access control | single user, read-only data (D7) | the API gets real users |
+| Row limit on log search | fixtures hold a handful of log lines | log volume is real |
+| Health trend or baseline | one value per metric is enough until something compares it against normal | the verifier needs a baseline |
+| Dependency status history | fixtures hold only the current status with `since` | a real status API exists |
+| Step limit, token budget | the graph has no loop | the graph gets a loop |
+| Persisting runs, resuming | no checkpointer | runs need to pause for approval |
+| API authentication | local single-user tool | the service is deployed |
