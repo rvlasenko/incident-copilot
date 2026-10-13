@@ -11,6 +11,8 @@ from typing import Final
 
 from incident_copilot.domain.loaders import FixtureDataset
 from incident_copilot.domain.models import (
+    Dependency,
+    DependencyStatus,
     Deploy,
     DeployStatus,
     LogEntry,
@@ -28,8 +30,14 @@ def at(hour: int, minute: int) -> datetime:
     return datetime(2026, 9, 22, hour, minute, tzinfo=UTC)
 
 
-def service(name: str) -> Service:
-    return Service(name=name, owner_team="team", description=name, depends_on=())
+def service(name: str, depends_on: Iterable[str] = ()) -> Service:
+    return Service(
+        name=name, owner_team="team", description=name, depends_on=tuple(depends_on)
+    )
+
+
+def dependency(name: str, status: DependencyStatus, since: datetime) -> Dependency:
+    return Dependency(name=name, status=status, since=since, description=name)
 
 
 def deploy(
@@ -76,14 +84,17 @@ def log(
 
 def dataset(
     *,
-    services: Iterable[str] = (),
+    services: Iterable[str | Service] = (),
+    dependencies: Iterable[Dependency] = (),
     deploys: Iterable[Deploy] = (),
     metrics: Iterable[MetricPoint] = (),
     logs: Iterable[LogEntry] = (),
 ) -> FixtureDataset:
     return FixtureDataset(
-        services=tuple(service(name) for name in services),
-        dependencies=(),
+        services=tuple(
+            service(item) if isinstance(item, str) else item for item in services
+        ),
+        dependencies=tuple(dependencies),
         deploys=tuple(deploys),
         metrics=tuple(metrics),
         logs=tuple(logs),

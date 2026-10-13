@@ -269,6 +269,23 @@ Tool outputs carry no `source` or `fetched_at` fields.
 - **Invariant:** members stay declared from least to most severe
   (`test_models.py` guards it).
 
+### D21. Internal and external dependencies are reported separately
+
+**Status:** Accepted (2026-10-13)
+
+`get_dependency_status` returns two lists: internal services by name, and
+external dependencies with status, `since` and description.
+
+- **Why:** fixtures hold a status only for external dependencies. One record
+  type with an optional status would let "no status known" look like a value.
+  The health of an internal service comes from `get_service_health`.
+- **Current status only:** the tool takes no time argument because fixtures
+  have no status history; `since` tells the reader whether the status already
+  held at the incident time.
+- **Invariant:** every name in `depends_on` resolves (checked by
+  `load_dataset`). If it does not, the tool raises `ToolError` rather than
+  silently dropping the dependency.
+
 ---
 
 ## Intentionally unsupported

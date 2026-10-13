@@ -82,8 +82,8 @@ AgentState: ToolResult per call  ◄──────────────�
 
 Built today: `ToolCall`, `ToolResult`, `ToolSpec`, `ServiceWindowInput`,
 `ToolError` in `tools/contracts.py`; `require_known_service` in
-`tools/checks.py`; `ServiceHealthTool`, `RecentDeploysTool`, `SearchLogsTool`.
-Planned: `get_dependency_status` (2.2), registry, `Tool` protocol and executor (2.3), retry policy (2.4), audit log
+`tools/checks.py`; `ServiceHealthTool`, `RecentDeploysTool`, `SearchLogsTool`,
+`DependencyStatusTool`. Planned: registry, `Tool` protocol and executor (2.3), retry policy (2.4), audit log
 (2.5).
 
 Rules every tool follows:

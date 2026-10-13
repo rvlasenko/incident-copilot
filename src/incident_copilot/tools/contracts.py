@@ -32,6 +32,7 @@ class ToolName(StrEnum):
     GET_SERVICE_HEALTH = "get_service_health"
     GET_RECENT_DEPLOYS = "get_recent_deploys"
     SEARCH_LOGS = "search_logs"
+    GET_DEPENDENCY_STATUS = "get_dependency_status"
 
 
 class ToolStatus(StrEnum):
