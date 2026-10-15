@@ -116,7 +116,8 @@ Every tool follows the same rules:
 | Run exceeds time limit | `run_graph` | `BUDGET_EXHAUSTED`, warning log |
 | Broken graph invariant | raised | 500 |
 | Tool cannot answer | the tool | `ToolError` |
-| Broken fixture file | `load_dataset` | `FixtureError` naming the file and line or item (exceptions under Known gaps) |
+| Broken fixture file | `load_dataset` | `FixtureError` naming the file and line or item |
+| Duplicate or unknown names across fixture files | `load_dataset` | `DatasetIntegrityError` listing every problem |
 
 ## Configuration
 
@@ -151,14 +152,6 @@ call the real API and are skipped without a key.
 
 Defects and loose ends in the current code, kept here until they are fixed.
 
-- **Duplicate names in fixtures are not rejected.** A duplicate service or
-  external dependency name, or a service named like an external dependency,
-  loads without error. `get_dependency_status` then silently reports the
-  wrong status, for example a degraded dependency as operational. D6 requires
-  this check now that a tool relies on unique names (D21).
-- **Two fixture failures escape `FixtureError`.** A file whose top level is not
-  a JSON array raises `TypeError` (or a misleading "item 0 is invalid" for an
-  object), and non-UTF-8 bytes raise `UnicodeDecodeError`.
 - **`RunOutcome.REFUSED` is never set.** The planner prompt sends unsafe
   requests to `handoff`. Either a node starts using it or it is removed, as
   `RETRIEVAL_ONLY` was (D18).

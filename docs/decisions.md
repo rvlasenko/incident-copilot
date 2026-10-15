@@ -286,8 +286,8 @@ external dependencies with status, `since` and description.
   `load_dataset`). If it does not, the tool raises `ToolError` rather than
   silently dropping the dependency.
 - **Invariant:** names are unique across services and external dependencies;
-  otherwise one name can resolve to the wrong record. Not enforced yet (see
-  `architecture.md`, Known gaps). A database schema would make it structural:
+  otherwise one name can resolve to the wrong record. Checked by
+  `load_dataset`. A database schema would make it structural:
   separate service-to-service and service-to-external relations with foreign
   keys and unique names.
 

@@ -5,6 +5,8 @@ where such a typo would otherwise break the agent silently.
 """
 
 import json
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -68,10 +70,15 @@ def load_json_list[ModelT: BaseModel](
         raw = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise FixtureLoadError(path, f"cannot read file: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise FixtureLoadError(path, f"not valid UTF-8: {exc.reason}") from exc
     except json.JSONDecodeError as exc:
         raise FixtureLoadError(
             path, f"invalid JSON: {exc.msg}", line=exc.lineno
         ) from exc
+    if not isinstance(raw, list):
+        # Iterating an object would walk its keys and report a misleading item error.
+        raise FixtureLoadError(path, f"expected a JSON array, got {type(raw).__name__}")
 
     items: list[ModelT] = []
     for index, item in enumerate(raw):
@@ -100,6 +107,8 @@ def load_jsonl[ModelT: BaseModel](
                     ) from exc
     except OSError as exc:
         raise FixtureLoadError(path, f"cannot read file: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise FixtureLoadError(path, f"not valid UTF-8: {exc.reason}") from exc
     return tuple(items)
 
 
@@ -112,10 +121,36 @@ def load_dataset(fixtures_dir: Path) -> FixtureDataset:
         metrics=load_json_list(fixtures_dir / METRICS_FILE, MetricPoint),
         logs=load_jsonl(fixtures_dir / LOGS_FILE, LogEntry),
     )
-    problems = find_unknown_references(dataset)
+    problems = find_duplicate_names(dataset) + find_unknown_references(dataset)
     if problems:
         raise DatasetIntegrityError(problems)
     return dataset
+
+
+def find_duplicate_names(dataset: FixtureDataset) -> list[str]:
+    """Return names that do not identify exactly one service or dependency.
+
+    `depends_on` refers to services and external dependencies by bare name, so a
+    repeated name would make lookups by name return an arbitrary record.
+    """
+    service_names = [service.name for service in dataset.services]
+    dependency_names = [dependency.name for dependency in dataset.dependencies]
+
+    problems = _repeated(SERVICES_FILE, service_names)
+    problems += _repeated(DEPENDENCIES_FILE, dependency_names)
+    problems += [
+        f"'{name}' is both a service and an external dependency"
+        for name in sorted(set(service_names) & set(dependency_names))
+    ]
+    return problems
+
+
+def _repeated(file_name: str, names: Iterable[str]) -> list[str]:
+    return [
+        f"{file_name}: duplicate name '{name}'"
+        for name, count in sorted(Counter(names).items())
+        if count > 1
+    ]
 
 
 def find_unknown_references(dataset: FixtureDataset) -> list[str]:
