@@ -31,7 +31,7 @@ class MetricReading(ToolModel):
 
 class ServiceHealth(ToolModel):
     service: NonEmptyStr
-    # None means the service does not report this metric, not that the value is zero.
+    # None means no point of this metric at or before `at`, not that the value is zero.
     error_rate: MetricReading | None
     latency_p99_ms: MetricReading | None
 

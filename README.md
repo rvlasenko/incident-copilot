@@ -2,12 +2,22 @@
 
 A controlled agentic workflow for on-call engineers. It takes a question about
 an incident, gathers evidence from runbooks and read-only operational tools,
-and ends every run in one explicit outcome. Risky actions are only proposed;
-a human approves them.
+and ends every run in exactly one explicit outcome. Risky actions are only
+proposed; a human approves them.
 
-> **Status:** early stage. The graph and planner are real; retrieval, executor,
-> verifier and answer are stubs. See [docs/architecture.md](docs/architecture.md)
-> for what is built today.
+## Status
+
+Early stage. Working today:
+
+- `POST /assist` validates the request, runs the agent graph under a time
+  limit and returns one outcome with HTTP 200.
+- An LLM planner sorts the request into a route: investigation,
+  runbook question, clarification or handoff.
+- Four read-only tools over synthetic fixtures, tested on their own.
+
+Not built yet: retrieval, the executor that calls the tools, the verifier and
+the real answer. Nothing in the graph calls the tools, so a request that
+reaches the answer step gets a placeholder answer.
 
 ## Why
 
@@ -20,16 +30,15 @@ project keeps the LLM inside deterministic control:
 - tools are read-only and typed;
 - behavior is meant to be measured offline, not eyeballed.
 
-The reasoning behind each choice is in [docs/decisions.md](docs/decisions.md).
-
 ## Quick start
 
-Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.13 and [uv](https://docs.astral.sh/uv/). Local development
+only; there is no deployment.
 
 ```bash
 make install                 # uv sync
 cp .env.example .env         # set OPENAI_API_KEY
-make run                     # dev server at http://127.0.0.1:8000
+make run                     # dev server with reload at http://127.0.0.1:8000
 ```
 
 ```bash
@@ -38,47 +47,23 @@ curl -X POST http://127.0.0.1:8000/assist \
   -d '{"query": "checkout is returning 5xx after a deploy, what is going on?"}'
 ```
 
-Run `make check` (lint, types, tests) before every commit. Tests do not need an
-API key; `make test-live` calls the real OpenAI API.
+Development commands:
 
-## Architecture
-
-Dependencies point one way: `api → agent → tools → domain`.
-
-| Package | Role |
-|---|---|
-| `api/` | HTTP boundary, request validation |
-| `agent/` | LangGraph graph: state, planner, nodes, routing |
-| `llm/` | provider-neutral structured LLM calls |
-| `tools/` | typed read-only adapters over operational data |
-| `domain/` | domain models and fixture loading |
-
-Details: [docs/architecture.md](docs/architecture.md).
-
-## Flow
-
-```
-POST /assist
-  ▼
-planner ─┬─ clarification ─► clarify ─────────────────────────► CLARIFICATION_NEEDED
-         ├─ handoff ───────► handoff ─────────────────────────► HANDED_OFF
-         ├─ retrieval_only ► retrieval ─► answer ─────────────► COMPLETED
-         └─ investigation ─► retrieval ─► executor ─► verifier ─► answer ─► COMPLETED
-
-time limit exceeded anywhere ─► BUDGET_EXHAUSTED
+```bash
+make fmt                     # format and auto-fix lint findings
+make check                   # lint, types, tests; run before every commit
+make test-live               # real OpenAI calls; needs OPENAI_API_KEY
 ```
 
-Every finished run returns HTTP 200 with exactly one outcome.
+Tests do not need an API key.
 
-## Layout
+## Documentation
 
-```
-src/incident_copilot/   application code (packages above, config.py)
-data/fixtures/          synthetic service state read by tools
-docs/                   architecture and design decisions
-tests/                  unit, graph and tool tests
-scripts/                manual playground scripts
-```
+- [docs/architecture.md](docs/architecture.md): how the system works today,
+  covering components, request flow, invariants, failure handling,
+  configuration and known gaps.
+- [docs/decisions.md](docs/decisions.md): why it is built this way, with the
+  alternatives that were rejected.
 
 ## Stack
 

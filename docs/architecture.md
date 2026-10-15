@@ -5,30 +5,35 @@ decides how to handle it, gathers evidence from runbooks and operational data,
 and answers with one of a fixed set of outcomes.
 
 This page describes the system as it is in the code. Reasons behind the shape
-are in [`decisions.md`](decisions.md); progress and next steps are in
-`PLAN.md` only.
+are in [`decisions.md`](decisions.md). Setup and commands are in the
+[README](../README.md).
+
+## What is built
+
+- Real: HTTP API, graph wiring and routing, LLM planner, run time limit, four
+  read-only tools with their contracts, fixture loading.
+- Stubs: `retrieval`, `executor` and `verifier` return no update; `answer`
+  returns a placeholder.
+- The tools exist and are tested, but nothing in the graph calls them yet.
 
 ## Components
 
 | Package | Role | Depends on |
 |---|---|---|
 | `api/` | HTTP boundary: request validation, one run per request | `agent` |
-| `agent/` | the graph: state, planner, nodes, routers, run time limit | `llm` |
+| `agent/` | the graph: state, planner, nodes, routers, run time limit | `llm`, `domain` |
 | `llm/` | provider-neutral structured LLM calls (`LLMProvider`) | vendor SDK |
 | `tools/` | typed read-only adapters over operational data | `domain` |
 | `domain/` | domain models and fixture loading | nothing internal |
 | `config.py` | settings from environment and `.env` | — |
 
-Dependencies point one way: `api → agent → tools → domain`. `tools` never
-imports from `agent`, so agent state can hold tool results without an import
-cycle.
+Dependencies point one way. Once the executor exists, `agent` will also
+depend on `tools`; `tools` must never import from `agent`, so agent state can
+hold tool results without an import cycle.
 
 `api/main.py` is the only place that reads settings and builds real
 dependencies such as the OpenAI provider. Everything else receives its
 dependencies as arguments, which is how tests replace the LLM and the data.
-
-Retrieval, executor and verifier nodes are stubs, and the tools are not called
-from the graph.
 
 ## Request flow
 
@@ -70,7 +75,7 @@ LangGraph merges them.
 
 | Tool | Input | Output |
 |---|---|---|
-| `get_service_health` | service, moment | latest error rate and p99 latency, each with `measured_at` |
+| `get_service_health` | service, moment | latest error rate and p99 latency at or before the moment, each with `measured_at` |
 | `get_recent_deploys` | service, window | deploys in the window, oldest first, without author |
 | `search_logs` | service, window, minimum level | log records, oldest first |
 | `get_dependency_status` | service | internal services by name; external dependencies with status |
@@ -82,9 +87,9 @@ arguments, run the tool and check its output), and `ToolError`.
 
 Every tool follows the same rules:
 
-1. Receives its data source in the constructor; never loads it itself.
+1. Receives its data source in the constructor; never loads it itself (D11).
 2. `run` is `async`, even over in-memory data, so a timeout can cancel it.
-3. Reads only; never changes state anywhere (D16).
+3. Reads only; never changes state anywhere.
 4. Returns a typed output model with the minimum fields needed (D14).
 5. Raises `ToolError` with a message safe to show; never returns an empty
    answer that could be mistaken for "healthy" (D13).
@@ -111,12 +116,13 @@ Every tool follows the same rules:
 | Run exceeds time limit | `run_graph` | `BUDGET_EXHAUSTED`, warning log |
 | Broken graph invariant | raised | 500 |
 | Tool cannot answer | the tool | `ToolError` |
-| Broken fixture file | `load_dataset` | `FixtureError` naming the file and line or item |
+| Broken fixture file | `load_dataset` | `FixtureError` naming the file and line or item (exceptions under Known gaps) |
 
 ## Configuration
 
 Read by `pydantic-settings` from the environment, then from `.env` in the
-working directory. `.env` holds the API key and must stay out of git.
+working directory. `.env` holds the API key and must stay out of git;
+`.env.example` lists every variable.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -129,21 +135,6 @@ working directory. `.env` holds the API key and must stay out of git.
 Tests never need the key: the LLM is replaced by fakes. Tests marked `live`
 call the real API and are skipped without a key.
 
-## Setup and running
-
-```bash
-make install               # uv sync: dependencies into .venv
-make fmt                   # format and auto-fix lint findings
-make check                 # lint, types, tests; run before every commit
-make test-live             # real OpenAI calls; needs OPENAI_API_KEY
-make run                   # dev server with reload (fastapi dev)
-```
-
-Scripts in `scripts/` call single tools on the repository fixtures, for
-example `uv run python scripts/try_recent_deploys.py`.
-
-The service runs locally only; there is no deployment.
-
 ## Testing approach
 
 - Graph tests inject fake planners to force each route and assert visited
@@ -155,3 +146,22 @@ The service runs locally only; there is no deployment.
 - External systems are replaced, business logic is not: the OpenAI API is
   replaced by a local HTTP stub or a fake provider; tool logic always runs for
   real.
+
+## Known gaps
+
+Defects and loose ends in the current code, kept here until they are fixed.
+
+- **Duplicate names in fixtures are not rejected.** A duplicate service or
+  external dependency name, or a service named like an external dependency,
+  loads without error. `get_dependency_status` then silently reports the
+  wrong status, for example a degraded dependency as operational. D6 requires
+  this check now that a tool relies on unique names (D21).
+- **Two fixture failures escape `FixtureError`.** A file whose top level is not
+  a JSON array raises `TypeError` (or a misleading "item 0 is invalid" for an
+  object), and non-UTF-8 bytes raise `UnicodeDecodeError`.
+- **`RunOutcome.REFUSED` is never set.** The planner prompt sends unsafe
+  requests to `handoff`. Either a node starts using it or it is removed, as
+  `RETRIEVAL_ONLY` was (D18).
+- **The planner extracts no service or time window yet** (D17), and there is
+  no reference time for "now" while fixtures describe one frozen day (D12).
+  Both are required before the executor can build tool calls.

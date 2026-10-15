@@ -3,7 +3,8 @@
 Why the code is shaped the way it is. Each entry records the decision, the
 alternatives that were rejected, and the price paid. Code explains *what*;
 this file explains *why*, so a change in behavior should come with a new or
-updated entry. Progress and next steps are tracked in `PLAN.md`, not here.
+updated entry. What the code does today, including known gaps, is in
+[`architecture.md`](architecture.md).
 
 Entries are numbered in the order they were made; numbers never change.
 
@@ -182,7 +183,7 @@ that depends on time takes the moment or window it is asked about.
 | Unknown service | `ToolError` (every tool) |
 | No deploys or logs in the window | `ok` with an empty list: "nothing happened" is evidence |
 | No metric points at or before the moment | `ToolError`: an empty health answer would read as "healthy" |
-| Metric the service never reports | that field is `None`, not zero |
+| No point of one metric at or before the moment | that field is `None`, not zero; it does not say whether the service reports that metric at all |
 
 ### D14. Field minimization
 
@@ -284,6 +285,11 @@ external dependencies with status, `since` and description.
 - **Invariant:** every name in `depends_on` resolves (checked by
   `load_dataset`). If it does not, the tool raises `ToolError` rather than
   silently dropping the dependency.
+- **Invariant:** names are unique across services and external dependencies;
+  otherwise one name can resolve to the wrong record. Not enforced yet (see
+  `architecture.md`, Known gaps). A database schema would make it structural:
+  separate service-to-service and service-to-external relations with foreign
+  keys and unique names.
 
 ---
 
